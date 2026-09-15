@@ -3,6 +3,7 @@ export { resolveConfig } from "./config.js";
 export { LymitConfigError } from "./errors.js";
 export { assertCost } from "./cost.js";
 export { fixedWindow, type FixedWindowState } from "./algorithms/fixed-window.js";
+export { slidingWindow, type SlidingWindowState } from "./algorithms/sliding-window.js";
 export type {
   Algorithm,
   AlgorithmResult,
