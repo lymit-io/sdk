@@ -79,3 +79,9 @@ export interface LimitResponse {
   /** Milliseconds until a retry could succeed. Present only when `success` is false. */
   retryAfter?: number;
 }
+
+/** What every algorithm returns: the next state to persist, plus the response for the caller. */
+export interface AlgorithmResult<State> {
+  state: State;
+  response: LimitResponse;
+}
