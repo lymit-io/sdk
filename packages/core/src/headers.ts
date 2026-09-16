@@ -1,13 +1,15 @@
 import type { LimitResponse } from "./types.js";
 
-export interface RateLimitHeaders {
+// A type alias (not an interface) so it is assignable to Hono's HeaderRecord index signature.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+export type RateLimitHeaders = {
   "X-RateLimit-Limit": string;
   "X-RateLimit-Remaining": string;
   /** Unix timestamp in whole seconds (the de-facto convention for this header). */
   "X-RateLimit-Reset": string;
   /** Whole seconds, rounded up, at least 1. Present only on retryable rejections. */
   "Retry-After"?: string;
-}
+};
 
 /** Serialise a `LimitResponse` as the conventional HTTP rate-limit headers. */
 export function toHeaders(response: LimitResponse): RateLimitHeaders {
