@@ -49,7 +49,11 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "check:package": "publint && attw --pack . --profile esm-only",
-    "prebuild": "pnpm --filter @lymit/core build"
+    "prebuild": "pnpm --filter @lymit/core build",
+    "test:node": "node --test runtimes/node.test.mjs",
+    "test:bun": "bun test runtimes/bun.test.ts",
+    "test:deno": "deno test --allow-env --allow-net runtimes/deno.test.ts",
+    "test:runtimes": "pnpm build && pnpm test:node && pnpm test:bun && pnpm test:deno"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

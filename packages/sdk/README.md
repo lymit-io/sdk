@@ -1,6 +1,6 @@
 # @lymit/sdk
 
-Edge-first, application-level rate limiting for AI apps. Limit by `userId`, `workspaceId` or `tier` — not IP — and deduct real LLM token cost from a budget with one call. Zero dependencies; runs on Node, Bun, Deno and Cloudflare Workers.
+Edge-first, application-level rate limiting for AI apps. Limit by `userId`, `workspaceId` or `tier` — not IP — and deduct real LLM token cost from a budget with one call. Zero dependencies; tested on every release against Node (ESM and CJS), Bun, Deno and Cloudflare Workers (`workerd`).
 
 ```bash
 npm install @lymit/sdk
