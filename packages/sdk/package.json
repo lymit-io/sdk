@@ -1,15 +1,60 @@
 {
   "name": "@lymit/sdk",
   "version": "0.0.0",
-  "description": "The Lymit client SDK. Fetch-only; runs on Node, Bun, Deno and Cloudflare Workers.",
-  "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
+  "description": "Edge-first, application-level rate limiting for AI apps. Limit by user, workspace or tier and deduct real LLM token cost with one call.",
   "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/corbae/lymit.git",
+    "directory": "packages/sdk"
+  },
+  "keywords": [
+    "rate-limit",
+    "rate-limiting",
+    "token-bucket",
+    "llm",
+    "ai",
+    "edge",
+    "cloudflare-workers",
+    "serverless"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "check:package": "publint && attw --pack . --profile esm-only",
+    "prebuild": "pnpm --filter @lymit/core build"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@lymit/core": "workspace:*",
+    "publint": "^0.3.24",
+    "tsup": "^8.5.1"
   }
 }

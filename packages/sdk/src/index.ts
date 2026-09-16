@@ -1,2 +1,10 @@
-// @lymit/sdk — placeholder entry point. Replaced as the package is built out.
-export const PACKAGE_NAME = "@lymit/sdk" as const;
+// @lymit/sdk — public surface. Built out in tasks 4.2–4.3.
+export {
+  LymitConfigError,
+  type Duration,
+  type FixedWindowConfig,
+  type LimitConfig,
+  type LimitResponse,
+  type SlidingWindowConfig,
+  type TokenBucketConfig,
+} from "@lymit/core";
