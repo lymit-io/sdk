@@ -10,6 +10,8 @@ export interface PlanEntitlements {
   /** Request quota, one of the two. Enforced in the Edge API (task 3.9). */
   requestsPerDay?: number;
   requestsPerMonth?: number;
+  /** Abuse ceiling on the Edge API itself: requests per UTC minute per workspace. */
+  burstPerMinute: number;
   /** Event retention for analytics. */
   retentionDays: number;
 }
@@ -23,17 +25,20 @@ export const PLANS: Record<Plan, PlanEntitlements> = {
     algorithms: ["fixedWindow", "slidingWindow"],
     overrides: false,
     requestsPerDay: 10_000,
+    burstPerMinute: 1_200,
     retentionDays: 7,
   },
   pro: {
     algorithms: ["fixedWindow", "slidingWindow", "tokenBucket"],
     overrides: true,
     requestsPerMonth: 1_000_000,
+    burstPerMinute: 6_000,
     retentionDays: 30,
   },
   enterprise: {
     algorithms: ["fixedWindow", "slidingWindow", "tokenBucket"],
     overrides: true,
+    burstPerMinute: 60_000,
     retentionDays: 90,
   },
 };

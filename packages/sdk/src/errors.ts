@@ -3,6 +3,7 @@ export type LymitErrorCode =
   | "bad_request"
   | "invalid_api_key"
   | "quota_exceeded"
+  | "too_many_requests"
   | "feature_not_in_plan"
   | "not_found"
   | "internal"
