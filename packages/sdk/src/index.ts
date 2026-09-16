@@ -1,4 +1,5 @@
-// @lymit/sdk — public surface. Built out in tasks 4.2–4.3.
+export { Lymit, type LimitOptions, type LymitOptions, type Namespace } from "./client.js";
+export { LymitError, type LymitErrorCode } from "./errors.js";
 export {
   LymitConfigError,
   type Duration,
