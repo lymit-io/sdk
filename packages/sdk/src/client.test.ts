@@ -137,3 +137,153 @@ describe("Lymit", () => {
     expect(err.name).toBe("LymitError");
   });
 });
+
+describe("resilience", () => {
+  const cfg = { algorithm: "fixedWindow", limit: 10, window: "1m" } as const;
+
+  it("fails open by default on a 5xx: allows the request and reports via onError", async () => {
+    const { fetch } = fakeFetch(json({ error: { code: "internal", message: "boom" } }, 500));
+    const onError = vi.fn();
+    const r = await new Lymit({ apiKey: "k", fetch, onError }).namespace("api", cfg).limit("u");
+    expect(r).toEqual({
+      success: true,
+      limit: 10,
+      remaining: 10,
+      reset: expect.any(Number) as number,
+    });
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "internal", status: 500 }),
+    );
+  });
+
+  it("fails open on a network error after one retry", async () => {
+    const { fetch } = fakeFetch(new TypeError("fetch failed"), new TypeError("fetch failed"));
+    const onError = vi.fn();
+    const r = await new Lymit({ apiKey: "k", fetch, onError }).namespace("api", cfg).limit("u");
+    expect(r.success).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "network_error" }));
+  });
+
+  it("succeeds when the retry succeeds", async () => {
+    const { fetch } = fakeFetch(new TypeError("fetch failed"), json(ok));
+    const r = await new Lymit({ apiKey: "k", fetch }).namespace("api", cfg).limit("u");
+    expect(r.remaining).toBe(350);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry 4xx responses", async () => {
+    const { fetch } = fakeFetch(json({ error: { code: "invalid_api_key", message: "no" } }, 401));
+    await expect(
+      new Lymit({ apiKey: "k", fetch }).namespace("api", cfg).limit("u"),
+    ).rejects.toMatchObject({
+      code: "invalid_api_key",
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a 5xx (the edge already decided)", async () => {
+    const { fetch } = fakeFetch(json({ error: { code: "internal", message: "boom" } }, 500));
+    await new Lymit({ apiKey: "k", fetch, onError: () => undefined })
+      .namespace("api", cfg)
+      .limit("u");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when configured: rejects the request instead of allowing it", async () => {
+    const { fetch } = fakeFetch(new TypeError("down"), new TypeError("down"));
+    const r = await new Lymit({ apiKey: "k", fetch, failMode: "closed" })
+      .namespace("api", cfg)
+      .limit("u");
+    expect(r.success).toBe(false);
+    expect(r.remaining).toBe(0);
+  });
+
+  it("never swallows client-side errors (bad key, plan gate) regardless of failMode", async () => {
+    const { fetch } = fakeFetch(
+      json({ error: { code: "feature_not_in_plan", message: "no" } }, 403),
+    );
+    await expect(
+      new Lymit({ apiKey: "k", fetch, failMode: "open" }).namespace("api", cfg).limit("u"),
+    ).rejects.toMatchObject({ code: "feature_not_in_plan" });
+  });
+
+  it("aborts a slow request after timeoutMs and treats it as a timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(
+        (_url: unknown, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("aborted", "AbortError"));
+            });
+          }),
+      );
+      const onError = vi.fn();
+      const p = new Lymit({ apiKey: "k", fetch, timeoutMs: 100, onError })
+        .namespace("api", cfg)
+        .limit("u");
+      await vi.advanceTimersByTimeAsync(250);
+      const r = await p;
+      expect(r.success).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(2); // timeout counts as a network failure: one retry
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "timeout" }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("validates resilience options", () => {
+    expect(() => new Lymit({ apiKey: "k", timeoutMs: 0 })).toThrow(LymitConfigError);
+    expect(() => new Lymit({ apiKey: "k", failMode: "maybe" as never })).toThrow(LymitConfigError);
+  });
+});
+
+describe("ephemeral cache", () => {
+  const cfg = { algorithm: "fixedWindow", limit: 10, window: "1m" } as const;
+
+  it("answers a known-blocked identifier locally until its reset passes", async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000 });
+    try {
+      const reset = 1_700_000_005_000;
+      const { fetch } = fakeFetch(json({ ...blocked, reset, retryAfter: 5_000 }, 429), json(ok));
+      const api = new Lymit({ apiKey: "k", fetch }).namespace("api", cfg);
+      expect((await api.limit("u")).success).toBe(false);
+      vi.setSystemTime(1_700_000_002_000);
+      const cached = await api.limit("u");
+      expect(cached).toEqual({
+        success: false,
+        limit: 500,
+        remaining: 0,
+        reset,
+        retryAfter: 3_000,
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(reset);
+      expect((await api.limit("u")).success).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is keyed by namespace and identifier", async () => {
+    const { fetch } = fakeFetch(json(blocked, 429), json(ok), json(ok));
+    const lymit = new Lymit({ apiKey: "k", fetch });
+    await lymit.namespace("a", cfg).limit("u");
+    expect((await lymit.namespace("a", cfg).limit("v")).success).toBe(true);
+    expect((await lymit.namespace("b", cfg).limit("u")).success).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("can be disabled", async () => {
+    const { fetch } = fakeFetch(json(blocked, 429), json(blocked, 429));
+    const api = new Lymit({ apiKey: "k", fetch, enableEphemeralCache: false }).namespace(
+      "api",
+      cfg,
+    );
+    await api.limit("u");
+    await api.limit("u");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});

@@ -56,6 +56,6 @@ Resolves to `{ success, limit, remaining, reset, retryAfter? }`.
 
 A rate-limit **rejection is a normal result** (`success: false`), never an exception. A **failure to reach Lymit** or a server-side refusal (bad key, plan gate) is a `LymitError` with a stable `code` (`invalid_api_key`, `feature_not_in_plan`, `quota_exceeded`, `bad_request`, `network_error`, `timeout`, `internal`) and `status`.
 
-## Roadmap for this package
+## Resilience
 
-Resilience options (`failMode: "open" | "closed"`, timeouts, retries, the in-process block cache) land in the next release. See the repository's `docs/` for the full design.
+One attempt plus one retry on network failure or timeout; HTTP responses are never retried. If Lymit is down, times out, or returns a 5xx, `failMode` decides: **open** (default) lets the request through with `remaining = limit` and calls `onError`, because an outage on our side must never take your app down; **closed** rejects it. See the repository's `docs/` for the full design.
