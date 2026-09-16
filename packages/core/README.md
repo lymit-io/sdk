@@ -1,6 +1,6 @@
 # @lymit/core
 
-Pure rate-limit algorithms and shared types. **Zero runtime dependencies, zero I/O** — no clocks, no network, no storage. Every function takes `now` as an argument, which is what makes the algorithms testable at 0 ms and lets the same code run in the Edge API, the SDK, and any future storage backend.
+Pure rate-limit algorithms and shared types. Design: [docs/architecture/algorithms.md](../../docs/architecture/algorithms.md). **Zero runtime dependencies, zero I/O** — no clocks, no network, no storage. Every function takes `now` as an argument, which is what makes the algorithms testable at 0 ms and lets the same code run in the Edge API, the SDK, and any future storage backend.
 
 ## Algorithms
 
