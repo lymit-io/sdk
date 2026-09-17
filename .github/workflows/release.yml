@@ -40,4 +40,3 @@ jobs:
           commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_LOGLEVEL: verbose # temporary: diagnose the OIDC exchange
