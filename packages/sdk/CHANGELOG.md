@@ -1,5 +1,11 @@
 # @lymit/sdk
 
+## 0.1.1
+
+### Patch Changes
+
+- [`a9f3509`](https://github.com/corbae/lymit/commit/a9f350910090f54122523dda472f6a3f624d9b35) Thanks [@corbae](https://github.com/corbae)! - Add the `too_many_requests` error code (the Edge API's per-workspace burst ceiling) to `LymitErrorCode`, and use a full `git+https` repository URL in package metadata.
+
 ## 0.1.0
 
 ### Minor Changes
