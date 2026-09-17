@@ -1,6 +1,6 @@
 {
   "name": "@lymit/sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Edge-first, application-level rate limiting for AI apps. Limit by user, workspace or tier and deduct real LLM token cost with one call.",
   "license": "MIT",
   "type": "module",
