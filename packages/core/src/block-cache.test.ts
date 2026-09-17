@@ -79,6 +79,34 @@ describe("BlockCache", () => {
     expect(cache.get("a", T0 + 5_000)).not.toBeNull();
   });
 
+  it("stops trusting an entry after maxTtlMs even when its reset is far away", () => {
+    const cache = new BlockCache({ maxTtlMs: 60_000 });
+    cache.remember("a", rejected(T0 + 3_600_000, 3_600_000), T0);
+    expect(cache.get("a", T0 + 59_999)?.retryAfter).toBe(3_540_001); // still the real reset
+    expect(cache.get("a", T0 + 60_000)).toBeNull(); // re-evaluated against the store
+    expect(cache.size).toBe(0);
+  });
+
+  it("defaults maxTtlMs to one minute", () => {
+    const cache = new BlockCache();
+    cache.remember("a", rejected(T0 + 3_600_000, 3_600_000), T0);
+    expect(cache.get("a", T0 + 60_000)).toBeNull();
+  });
+
+  it("forget(prefix) drops one workspace's entries and keeps the rest", () => {
+    const cache = new BlockCache();
+    cache.remember("ws1\u001fai\u001fu1", rejected(T0 + 60_000, 60_000), T0);
+    cache.remember("ws1\u001fai\u001fu2", rejected(T0 + 60_000, 60_000), T0);
+    cache.remember("ws10\u001fai\u001fu1", rejected(T0 + 60_000, 60_000), T0);
+    cache.forget("ws1\u001f");
+    expect(cache.size).toBe(1);
+    expect(cache.get("ws10\u001fai\u001fu1", T0 + 1)).not.toBeNull();
+  });
+
+  it("rejects a non-positive maxTtlMs", () => {
+    expect(() => new BlockCache({ maxTtlMs: 0 })).toThrow();
+  });
+
   it("clear() empties the cache", () => {
     const cache = new BlockCache();
     cache.remember("a", rejected(T0 + 60_000, 60_000), T0);
