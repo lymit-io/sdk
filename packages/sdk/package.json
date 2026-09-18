@@ -6,7 +6,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/corbae/lymit.git",
+    "url": "git+https://github.com/lymit-io/lymit.git",
     "directory": "packages/sdk"
   },
   "keywords": [
