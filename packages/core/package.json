@@ -1,11 +1,41 @@
 {
   "name": "@lymit/core",
   "version": "0.0.0",
-  "private": true,
-  "description": "Pure rate-limit algorithms and shared types. Zero dependencies, zero I/O.",
+  "description": "Pure rate-limit algorithms (fixed window, sliding window, token bucket), config resolution and a block cache. Zero dependencies, zero I/O. The algorithms inside @lymit/sdk and the Lymit edge.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lymit-io/sdk.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://lymit.io",
+  "bugs": "https://github.com/lymit-io/sdk/issues",
+  "keywords": [
+    "rate-limit",
+    "rate-limiting",
+    "token-bucket",
+    "sliding-window",
+    "edge"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsup",
@@ -13,11 +43,5 @@
   },
   "devDependencies": {
     "tsup": "^8.5.1"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
   }
 }

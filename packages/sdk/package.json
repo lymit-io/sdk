@@ -6,7 +6,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lymit-io/lymit.git",
+    "url": "git+https://github.com/lymit-io/sdk.git",
     "directory": "packages/sdk"
   },
   "keywords": [
@@ -60,5 +60,6 @@
     "@lymit/core": "workspace:*",
     "publint": "^0.3.24",
     "tsup": "^8.5.1"
-  }
+  },
+  "bugs": "https://github.com/lymit-io/sdk/issues"
 }
