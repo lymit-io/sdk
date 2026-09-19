@@ -1,6 +1,6 @@
 {
   "name": "@lymit/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Pure rate-limit algorithms (fixed window, sliding window, token bucket), config resolution and a block cache. Zero dependencies, zero I/O. The algorithms inside @lymit/sdk and the Lymit edge.",
   "license": "MIT",
   "repository": {
