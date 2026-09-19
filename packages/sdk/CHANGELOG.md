@@ -1,5 +1,11 @@
 # @lymit/sdk
 
+## 0.1.2
+
+### Patch Changes
+
+- [`7d07913`](https://github.com/lymit-io/sdk/commit/7d07913116d181afb61b61a52c797601c4f01af0) Thanks [@corbae](https://github.com/corbae)! - Token bucket is available on every plan (the bundled `PLANS` table and README no longer mark it Pro-only).
+
 ## 0.1.1
 
 ### Patch Changes
