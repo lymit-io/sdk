@@ -3,7 +3,11 @@ import type { Algorithm } from "./types.js";
 export type Plan = "hobby" | "pro" | "enterprise";
 
 export interface PlanEntitlements {
-  /** Algorithms the plan may use; others are rejected with `feature_not_in_plan`. */
+  /**
+   * Algorithms the plan may use; others are rejected with `feature_not_in_plan`. Every plan
+   * has all three (founder decision Q2, 2026-09-18): the token bucket is the product, so
+   * Hobby is capped in volume, not capability. The gate stays for future paid features.
+   */
   algorithms: readonly Algorithm[];
   /** Whether workspace namespace config and dashboard rules are applied at the edge. */
   overrides: boolean;
@@ -22,7 +26,7 @@ export interface PlanEntitlements {
  */
 export const PLANS: Record<Plan, PlanEntitlements> = {
   hobby: {
-    algorithms: ["fixedWindow", "slidingWindow"],
+    algorithms: ["fixedWindow", "slidingWindow", "tokenBucket"],
     overrides: false,
     requestsPerDay: 10_000,
     burstPerMinute: 1_200,

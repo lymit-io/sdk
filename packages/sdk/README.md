@@ -38,11 +38,11 @@ if (!success) return new Response("Budget exhausted", { status: 429 });
 
 Declares a namespace. `config` is validated immediately, so a typo fails at startup rather than on the first request. Limits can be changed later from the dashboard (Pro) without touching code — the edge layers workspace config and per-identifier rules over what you declare here.
 
-| Algorithm       | Config                               | Use for                                                             |
-| --------------- | ------------------------------------ | ------------------------------------------------------------------- |
-| `fixedWindow`   | `{ limit, window }`                  | Simple request caps                                                 |
-| `slidingWindow` | `{ limit, window }`                  | Caps without boundary bursts                                        |
-| `tokenBucket`   | `{ capacity, refillRate, interval }` | Budgets where requests have different costs (LLM tokens). Pro plan. |
+| Algorithm       | Config                               | Use for                                                   |
+| --------------- | ------------------------------------ | --------------------------------------------------------- |
+| `fixedWindow`   | `{ limit, window }`                  | Simple request caps                                       |
+| `slidingWindow` | `{ limit, window }`                  | Caps without boundary bursts                              |
+| `tokenBucket`   | `{ capacity, refillRate, interval }` | Budgets where requests have different costs (LLM tokens). |
 
 Durations are ms or `"500ms"`, `"30s"`, `"10m"`, `"1h"`, `"1d"`.
 
