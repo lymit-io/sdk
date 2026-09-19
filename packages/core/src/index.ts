@@ -2,7 +2,6 @@ export { parseDuration } from "./duration.js";
 export { resolveConfig } from "./config.js";
 export { LymitConfigError } from "./errors.js";
 export { assertCost } from "./cost.js";
-export { PLANS, isPlan, type Plan, type PlanEntitlements } from "./plans.js";
 export { applyLimit, isStateFor, type LimitState } from "./apply.js";
 export { BlockCache, type BlockCacheOptions } from "./block-cache.js";
 export { toHeaders, type RateLimitHeaders } from "./headers.js";
