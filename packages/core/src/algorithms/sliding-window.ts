@@ -51,6 +51,34 @@ export function slidingWindow(
   };
 }
 
+/**
+ * Settle a call after the fact by adjusting the current window's count (never below zero).
+ * Like `fixedWindowSettle`, it always applies and may push usage past `limit`.
+ *
+ * Pure: never mutates `state`.
+ */
+export function slidingWindowSettle(
+  state: SlidingWindowState | null,
+  config: ResolvedSlidingWindowConfig,
+  now: number,
+  delta: number,
+): AlgorithmResult<SlidingWindowState> {
+  const { limit, windowMs } = config;
+  const current = currentWindow(state, now, windowMs);
+  const currentCount = Math.max(0, current.currentCount + delta);
+  const elapsed = clamp((now - current.windowStart) / windowMs, 0, 1);
+  const used = current.previousCount * (1 - elapsed) + currentCount;
+  return {
+    state: { ...current, currentCount },
+    response: {
+      success: true,
+      limit,
+      remaining: Math.max(0, Math.floor(limit - used)),
+      reset: current.windowStart + windowMs,
+    },
+  };
+}
+
 function currentWindow(
   state: SlidingWindowState | null,
   now: number,

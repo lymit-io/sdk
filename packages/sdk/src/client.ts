@@ -18,13 +18,19 @@ export interface LymitOptions {
   /** Edge API origin. Default `https://api.lymit.io`. */
   baseUrl?: string;
   /**
-   * What to do when Lymit cannot be reached or returns a server error.
-   * `"open"` (default): allow the request and report via `onError` — an outage on our side
-   * must never take your app down. `"closed"`: reject the request.
-   * Client-side errors (bad key, plan gate, bad request) always throw regardless.
+   * What to do when Lymit cannot answer: it is unreachable, returns a server error, or your
+   * workspace is over its plan quota or per-minute ceiling (`quota_exceeded`,
+   * `too_many_requests`).
+   * `"open"` (default): allow the request and report via `onError` — nothing on our side,
+   * billing included, may take your app down. `"closed"`: reject the request.
+   * Mistakes in your code or setup (bad key, plan gate, bad request) always throw regardless.
    */
   failMode?: FailMode;
-  /** Abort a check after this long and apply `failMode`. Default 3 000 ms. */
+  /**
+   * Abort an attempt after this long, retry once, then apply `failMode`. Default 1 000 ms, so
+   * an outage adds at most ~2 s. A warm call takes 11–23 ms; the first call into a cold
+   * Cloudflare location can take over a second, which is why this is not lower.
+   */
   timeoutMs?: number;
   /** Called whenever `failMode` kicks in. Default: `console.warn`. */
   onError?: (error: LymitError) => void;
@@ -39,15 +45,31 @@ export interface LimitOptions {
   cost?: number;
 }
 
+export interface SettleOptions {
+  /** The `cost` you passed to `limit()` before the call. Non-negative integer. */
+  reserved: number;
+  /** What the call really cost, e.g. the response's total tokens. Non-negative integer. */
+  actual: number;
+}
+
 export interface Namespace {
   readonly name: string;
   readonly config: LimitConfig;
   /** Check and consume for `identifier`. Resolves to a `LimitResponse`; never throws for a rejection. */
   limit(identifier: string, options?: LimitOptions): Promise<LimitResponse>;
+  /**
+   * Charge the real cost once you know it: refunds an over-estimate, or deducts the rest of
+   * an under-estimate even if that leaves `identifier` in debt (later calls wait for refill
+   * to repay it). Resolves to the state after settling, or `null` when there was nothing to
+   * send (`actual === reserved`) or Lymit could not be reached — reported via `onError`.
+   * The cost was already incurred, so an outage never fails your request here, whatever
+   * `failMode` says.
+   */
+  settle(identifier: string, options: SettleOptions): Promise<LimitResponse | null>;
 }
 
 const DEFAULT_BASE_URL = "https://api.lymit.io";
-const DEFAULT_TIMEOUT_MS = 3_000;
+const DEFAULT_TIMEOUT_MS = 1_000;
 
 /**
  * The Lymit client. One instance per process; create namespaces from it.
@@ -62,7 +84,7 @@ const DEFAULT_TIMEOUT_MS = 3_000;
  */
 export class Lymit {
   readonly #apiKey: string;
-  readonly #endpoint: string;
+  readonly #baseUrl: string;
   readonly #failMode: FailMode;
   readonly #timeoutMs: number;
   readonly #onError: (error: LymitError) => void;
@@ -86,7 +108,7 @@ export class Lymit {
       );
     }
     this.#apiKey = options.apiKey;
-    this.#endpoint = `${(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "")}/v1/limit`;
+    this.#baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.#failMode = failMode;
     this.#timeoutMs = timeoutMs;
     this.#onError =
@@ -106,6 +128,7 @@ export class Lymit {
       name,
       config,
       limit: (identifier, options = {}) => this.#limit(name, config, identifier, options),
+      settle: (identifier, options) => this.#settle(name, config, identifier, options),
     };
   }
 
@@ -130,9 +153,9 @@ export class Lymit {
     });
     let response: LimitResponse;
     try {
-      response = await this.#request(body);
+      response = await this.#request("/v1/limit", body);
     } catch (error) {
-      if (!(error instanceof LymitError) || !isOurFault(error)) throw error;
+      if (!(error instanceof LymitError) || !appliesFailMode(error)) throw error;
       this.#onError(error);
       return fallback(this.#failMode, config, Date.now());
     }
@@ -140,12 +163,38 @@ export class Lymit {
     return response;
   }
 
+  async #settle(
+    namespace: string,
+    config: LimitConfig,
+    identifier: string,
+    { reserved, actual }: SettleOptions,
+  ): Promise<LimitResponse | null> {
+    assertIdentifier(identifier, "identifier");
+    assertCost(reserved);
+    assertCost(actual);
+    const delta = actual - reserved;
+    if (delta === 0) return null;
+
+    const body = JSON.stringify({ namespace, identifier, delta, config });
+    let response: LimitResponse;
+    try {
+      response = await this.#request("/v1/settle", body);
+    } catch (error) {
+      if (!(error instanceof LymitError) || !appliesFailMode(error)) throw error;
+      this.#onError(error);
+      return null;
+    }
+    // A refund can make a locally cached rejection wrong; let the next call ask the edge.
+    if (delta < 0) this.#cache?.forget(`${namespace}${KEY_SEPARATOR}${identifier}`);
+    return response;
+  }
+
   /** One attempt plus one retry on network failure or timeout; never retries an HTTP response. */
-  async #request(body: string): Promise<LimitResponse> {
+  async #request(path: string, body: string): Promise<LimitResponse> {
     let lastError: LymitError | undefined;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        return await this.#attempt(body);
+        return await this.#attempt(path, body);
       } catch (error) {
         if (
           error instanceof LymitError &&
@@ -160,14 +209,14 @@ export class Lymit {
     throw lastError ?? new LymitError("Lymit: request failed", { code: "network_error" });
   }
 
-  async #attempt(body: string): Promise<LimitResponse> {
+  async #attempt(path: string, body: string): Promise<LimitResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       controller.abort();
     }, this.#timeoutMs);
     let response: Response;
     try {
-      response = await this.#fetch(this.#endpoint, {
+      response = await this.#fetch(`${this.#baseUrl}${path}`, {
         method: "POST",
         headers: { authorization: `Bearer ${this.#apiKey}`, "content-type": "application/json" },
         body,
@@ -196,9 +245,21 @@ export class Lymit {
   }
 }
 
-/** Server-side or transport trouble → `failMode` applies. Client-side mistakes always throw. */
-function isOurFault(error: LymitError): boolean {
-  return error.code === "network_error" || error.code === "timeout" || error.code === "internal";
+/**
+ * Trouble on our side → `failMode` applies: transport, server errors, and the workspace's
+ * own quota and burst ceiling (a billing state, not a bug in the caller's code — it must not
+ * turn every AI route into a 500). Mistakes in the caller's code or setup always throw.
+ */
+const FAIL_MODE_CODES: ReadonlySet<LymitErrorCode> = new Set([
+  "network_error",
+  "timeout",
+  "internal",
+  "quota_exceeded",
+  "too_many_requests",
+]);
+
+function appliesFailMode(error: LymitError): boolean {
+  return FAIL_MODE_CODES.has(error.code);
 }
 
 function fallback(mode: FailMode, config: LimitConfig, now: number): LimitResponse {

@@ -233,6 +233,51 @@ describe("resilience", () => {
     }
   });
 
+  it.each(["quota_exceeded", "too_many_requests"] as const)(
+    "applies failMode to the workspace's own %s, instead of throwing into the route",
+    async (code) => {
+      const body = { error: { code, message: "over" } };
+      const open = fakeFetch(json(body, 429, { "retry-after": "60" }));
+      const onError = vi.fn();
+      const r = await new Lymit({ apiKey: "k", fetch: open.fetch, onError })
+        .namespace("api", cfg)
+        .limit("u");
+      expect(r.success).toBe(true);
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code, status: 429 }));
+
+      const closed = fakeFetch(json(body, 429));
+      const c = await new Lymit({ apiKey: "k", fetch: closed.fetch, failMode: "closed" })
+        .namespace("api", cfg)
+        .limit("u");
+      expect(c.success).toBe(false);
+      expect(open.fetch).toHaveBeenCalledTimes(1); // an answer, not a transport failure: no retry
+    },
+  );
+
+  it("gives up after 1 s per attempt by default, so an outage adds at most ~2 s", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(
+        (_url: unknown, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("aborted", "AbortError"));
+            });
+          }),
+      );
+      const p = new Lymit({ apiKey: "k", fetch, onError: () => undefined })
+        .namespace("api", cfg)
+        .limit("u");
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1_001);
+      expect((await p).success).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("validates resilience options", () => {
     expect(() => new Lymit({ apiKey: "k", timeoutMs: 0 })).toThrow(LymitConfigError);
     expect(() => new Lymit({ apiKey: "k", failMode: "maybe" as never })).toThrow(LymitConfigError);
@@ -285,5 +330,83 @@ describe("ephemeral cache", () => {
     await api.limit("u");
     await api.limit("u");
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("settle", () => {
+  const settled = { success: true, limit: 500, remaining: 120, reset: 1_700_000_001_500 };
+
+  it("posts actual minus reserved to /v1/settle with the namespace config", async () => {
+    const { fetch, calls } = fakeFetch(json(settled));
+    const ai = new Lymit({ apiKey: "k", fetch }).namespace("ai", config);
+    const result = await ai.settle("user_1", { reserved: 200, actual: 430 });
+
+    expect(result).toEqual(settled);
+    expect(calls[0]?.url).toBe("https://api.lymit.io/v1/settle");
+    expect(calls[0]?.body).toEqual({ namespace: "ai", identifier: "user_1", delta: 230, config });
+  });
+
+  it("refunds an over-estimate with a negative delta", async () => {
+    const { fetch, calls } = fakeFetch(json(settled));
+    await new Lymit({ apiKey: "k", fetch })
+      .namespace("ai", config)
+      .settle("u", { reserved: 500, actual: 120 });
+    expect(calls[0]?.body).toMatchObject({ delta: -380 });
+  });
+
+  it("makes no request when the estimate was exact", async () => {
+    const { fetch } = fakeFetch();
+    const r = await new Lymit({ apiKey: "k", fetch })
+      .namespace("ai", config)
+      .settle("u", { reserved: 300, actual: 300 });
+    expect(r).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("validates its inputs before calling the network", async () => {
+    const { fetch } = fakeFetch();
+    const ai = new Lymit({ apiKey: "k", fetch }).namespace("ai", config);
+    await expect(ai.settle("", { reserved: 1, actual: 2 })).rejects.toThrow(LymitConfigError);
+    await expect(ai.settle("u", { reserved: -1, actual: 2 })).rejects.toThrow(LymitConfigError);
+    await expect(ai.settle("u", { reserved: 1, actual: 2.5 })).rejects.toThrow(LymitConfigError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("never fails the caller on an outage, whatever failMode: it reports and resolves null", async () => {
+    const { fetch } = fakeFetch(new TypeError("down"), new TypeError("down"));
+    const onError = vi.fn();
+    const r = await new Lymit({ apiKey: "k", fetch, onError, failMode: "closed" })
+      .namespace("ai", config)
+      .settle("u", { reserved: 1, actual: 9 });
+    expect(r).toBeNull();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "network_error" }));
+  });
+
+  it("still throws client-side mistakes such as a bad key", async () => {
+    const { fetch } = fakeFetch(json({ error: { code: "invalid_api_key", message: "no" } }, 401));
+    await expect(
+      new Lymit({ apiKey: "k", fetch })
+        .namespace("ai", config)
+        .settle("u", { reserved: 1, actual: 2 }),
+    ).rejects.toMatchObject({ code: "invalid_api_key" });
+  });
+
+  it("lets a refunded identifier through without waiting out a cached rejection", async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000 });
+    try {
+      const reset = Date.now() + 60_000;
+      const { fetch } = fakeFetch(
+        json({ ...blocked, reset, retryAfter: 60_000 }, 429),
+        json(settled),
+        json(ok),
+      );
+      const ai = new Lymit({ apiKey: "k", fetch }).namespace("ai", config);
+      expect((await ai.limit("u", { cost: 400 })).success).toBe(false); // now cached
+      await ai.settle("u", { reserved: 400, actual: 50 });
+      expect((await ai.limit("u", { cost: 10 })).success).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

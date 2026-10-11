@@ -40,6 +40,34 @@ export function fixedWindow(
   };
 }
 
+/**
+ * Settle a call after the fact: add `delta` to the current window's count, or refund
+ * `-delta` from it. Always applies, so the count may pass `limit` (later calls in the window
+ * are then rejected) but never drops below zero. A settle that lands in a later window than
+ * its call adjusts the later one: the earlier window is gone and no longer limits anything.
+ *
+ * Pure: never mutates `state`.
+ */
+export function fixedWindowSettle(
+  state: FixedWindowState | null,
+  config: ResolvedFixedWindowConfig,
+  now: number,
+  delta: number,
+): AlgorithmResult<FixedWindowState> {
+  const { limit, windowMs } = config;
+  const current = currentWindow(state, now, windowMs);
+  const count = Math.max(0, current.count + delta);
+  return {
+    state: { windowStart: current.windowStart, count },
+    response: {
+      success: true,
+      limit,
+      remaining: Math.max(0, limit - count),
+      reset: current.windowStart + windowMs,
+    },
+  };
+}
+
 function currentWindow(
   state: FixedWindowState | null,
   now: number,

@@ -37,8 +37,40 @@ export function tokenBucket(
     response: {
       success,
       limit: capacity,
-      remaining: Math.floor(tokens),
+      // A settle can leave the bucket in debt; nothing is available until refill repays it.
+      remaining: Math.max(0, Math.floor(tokens)),
       ...resetFields(success, cost, capacity, tokens, tokensPerMs, now),
+    },
+  };
+}
+
+/**
+ * Settle a call after the fact: deduct `delta` more (actual usage exceeded the reservation)
+ * or refund `-delta` (it was over-estimated). Unlike `tokenBucket`, this always applies —
+ * the cost has already been incurred — so it may leave the bucket negative. That debt is
+ * the point: dropping the charge when the user is nearly empty would hand free tokens to
+ * exactly the caller a budget exists to stop. Refill repays it before the next call can
+ * succeed. Refunds never fill past `capacity`.
+ *
+ * Pure: never mutates `state`.
+ */
+export function tokenBucketSettle(
+  state: TokenBucketState | null,
+  config: ResolvedTokenBucketConfig,
+  now: number,
+  delta: number,
+): AlgorithmResult<TokenBucketState> {
+  const { capacity, refillRate, intervalMs } = config;
+  const tokensPerMs = refillRate / intervalMs;
+  const refilled = refill(state, capacity, tokensPerMs, now);
+  const tokens = Math.min(capacity, refilled.tokens - delta);
+  return {
+    state: { tokens, lastRefill: refilled.lastRefill },
+    response: {
+      success: true,
+      limit: capacity,
+      remaining: Math.max(0, Math.floor(tokens)),
+      reset: now + msUntil(capacity - tokens, tokensPerMs),
     },
   };
 }
