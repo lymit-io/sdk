@@ -18,17 +18,20 @@ const ai = lymit.namespace("ai_generation", {
   interval: "1h",
 });
 
-const result = await ai.limit("user_123", { cost: 150 });
+const result = await ai.limit("user_123", { cost: 150 }); // reserve an estimate
 // { success, limit, remaining, reset }
+// …call the model…
+await ai.settle("user_123", { reserved: 150, actual: usage.totalTokens }); // charge the real cost
 ```
 
 Docs: [lymit.io/docs](https://lymit.io/docs). Sign in at [lymit.io](https://lymit.io) for a key.
 
 ## Principles
 
-- **A rejection is a result, not an exception.** `success: false` comes back with `remaining` and `reset`; only unreachable service or bad input throws.
-- **Your uptime does not depend on ours.** If Lymit cannot be reached the SDK fails **open** by default (configurable), after one retry, within a 3 s timeout.
+- **A rejection is a result, not an exception.** `success: false` comes back with `remaining` and `reset`. Only a mistake in your code or setup (bad key, bad input) throws.
+- **Your uptime does not depend on ours.** If Lymit cannot answer — down, slow, or your workspace is over its plan quota — the SDK fails **open** by default (configurable), after one retry of at most 1 s each.
 - **No hidden dependencies.** One `fetch`. Core's algorithms are inlined at build time.
+- **Budgets settle on what really happened.** Reserve an estimate with `limit()`, then `settle()` the actual cost: over-estimates are refunded, and under-estimates are charged even when that leaves the user in debt, so a nearly empty budget is never a free pass.
 - **Known-blocked callers cost no round trip.** An in-process block cache answers repeat offenders until their `reset`.
 
 ## Contributing

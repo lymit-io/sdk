@@ -4,6 +4,7 @@ export {
   type LimitOptions,
   type LymitOptions,
   type Namespace,
+  type SettleOptions,
 } from "./client.js";
 export { LymitError, type LymitErrorCode } from "./errors.js";
 export {

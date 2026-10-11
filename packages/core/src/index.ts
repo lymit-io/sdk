@@ -3,12 +3,25 @@ export { resolveConfig } from "./config.js";
 export { LymitConfigError } from "./errors.js";
 export { assertCost } from "./cost.js";
 export { applyLimit, isStateFor, type LimitState } from "./apply.js";
+export { assertDelta, settleLimit } from "./settle.js";
 export { BlockCache, type BlockCacheOptions } from "./block-cache.js";
 export { toHeaders, type RateLimitHeaders } from "./headers.js";
 export { assertIdentifier, keyFor, KEY_SEPARATOR, MAX_IDENTIFIER_LENGTH } from "./key.js";
-export { fixedWindow, type FixedWindowState } from "./algorithms/fixed-window.js";
-export { slidingWindow, type SlidingWindowState } from "./algorithms/sliding-window.js";
-export { tokenBucket, type TokenBucketState } from "./algorithms/token-bucket.js";
+export {
+  fixedWindow,
+  fixedWindowSettle,
+  type FixedWindowState,
+} from "./algorithms/fixed-window.js";
+export {
+  slidingWindow,
+  slidingWindowSettle,
+  type SlidingWindowState,
+} from "./algorithms/sliding-window.js";
+export {
+  tokenBucket,
+  tokenBucketSettle,
+  type TokenBucketState,
+} from "./algorithms/token-bucket.js";
 export type {
   Algorithm,
   AlgorithmResult,
